@@ -165,6 +165,39 @@ def story_game_score(text: str, wanted: str | None) -> int:
     return 0
 
 
+def story_route_answer(lowered: str, language: str) -> str:
+    if language == "English":
+        return (
+            "If a story marker is missing, navigate by the main story chain and named transitions. "
+            "Shadow of Chernobyl: Cordon -> Garbage -> Agroprom -> Bar/Rostok -> Dark Valley -> X-18 -> Yantar/X-16 -> Radar/X-10 -> Pripyat -> CNPP. "
+            "Clear Sky: Swamps -> Cordon -> Garbage -> Dark Valley -> Agroprom -> Yantar -> Red Forest -> Limansk -> Hospital -> CNPP. "
+            "Call of Pripyat: Zaton -> Jupiter -> Pripyat -> finale/evacuation. "
+            "For exact left/right directions, mention your current location, entry point, and the nearest landmark."
+        )
+    if "\u0442\u0435\u043d\u044c" in lowered or "\u0447\u0435\u0440\u043d\u043e\u0431" in lowered:
+        return (
+            "Если в Тени Чернобыля пропал маркер, иди по основной цепочке: "
+            "Кордон -> Свалка -> Агропром -> Бар/Росток -> Тёмная Долина -> X-18 -> Янтарь/X-16 -> Радар/X-10 -> Припять -> ЧАЭС. "
+            "Ориентиры: Кордон — Сидорович/Волк/Шустрый; Свалка — Бес/Серый; Агропром — Крот, подземелья и база военных; Бар — Бармен; "
+            "Тёмная Долина — база бандитов и X-18; Янтарь — учёные и X-16; Радар — X-10 и проход на Припять. "
+            "Точное «лево/право» можно дать только от конкретного входа или ориентира."
+        )
+    if "\u0437\u043e\u0432" in lowered or "\u043f\u0440\u0438\u043f\u044f\u0442" in lowered:
+        return (
+            "Если в Зове Припяти пропал маркер, держись цепочки: Затон -> Юпитер -> Припять -> финал/эвакуация. "
+            "На Затоне ориентиры — Скадовск, вертолёты Скат и Ной для прохода на плато. "
+            "На Юпитере — станция Янов, завод Юпитер, документы и подготовка прохода в Припять. "
+            "В Припяти — отряд военных, лаборатория X-8, документы и финальные задания. "
+            "Если нужен маршрут по месту, напиши текущую локацию и последний выполненный квест."
+        )
+    return (
+        "Если в Чистом Небе пропал маркер или непонятно, куда идти, ориентируйся по цепочке: "
+        "Болота -> Кордон -> Свалка -> Тёмная Долина -> Агропром -> Янтарь -> Рыжий лес -> Лиманск -> Госпиталь -> ЧАЭС. "
+        "На Болотах ориентир — база Чистого Неба и точки ренегатов. На Кордоне — Деревня новичков, Волк и одиночки; военный блокпост лучше не штурмовать в лоб. "
+        "На Свалке держись переходов к Бару/Тёмной Долине и сюжетных NPC. Дальше сюжет ведёт через Тёмную Долину, Агропром, Янтарь и Рыжий лес к Лиманску. "
+        "Лево/право безопасно давать только от конкретного входа: напиши, с какой стороны вошёл на локацию и что видишь рядом."
+    )
+
 
 def local_fallback_answer(question: str) -> str:
     question = (question or "").strip()
@@ -240,6 +273,17 @@ def local_fallback_answer(question: str) -> str:
             "\u041c\u0438\u0440\u043d\u043e\u0433\u043e \u0432\u0430\u0440\u0438\u0430\u043d\u0442\u0430 \u00ab\u0434\u043e\u0433\u043e\u0432\u043e\u0440\u0438\u0442\u044c\u0441\u044f\u00bb \u043f\u043e \u043e\u0441\u043d\u043e\u0432\u043d\u043e\u043c\u0443 \u0441\u044e\u0436\u0435\u0442\u0443 \u043d\u0435\u0442: \u043e\u043d\u0438 \u0431\u0443\u0434\u0443\u0442 \u0441\u0442\u0440\u0435\u043b\u044f\u0442\u044c. "
             "\u041d\u0430 \u0431\u0430\u0437\u0435 \u0440\u0435\u043d\u0435\u0433\u0430\u0442\u043e\u0432 \u0442\u0435\u0431\u044f \u0436\u0434\u0451\u0442 \u0431\u043e\u0439: \u0438\u0434\u0438 \u0441 \u043e\u0442\u0440\u044f\u0434\u0430\u043c\u0438 \u0427\u0438\u0441\u0442\u043e\u0433\u043e \u041d\u0435\u0431\u0430/\u043f\u043e \u043c\u0430\u0440\u043a\u0435\u0440\u0443, \u0431\u0435\u0440\u0438 \u0443\u043a\u0440\u044b\u0442\u0438\u044f, \u0437\u0430\u0447\u0438\u0449\u0430\u0439 \u0442\u043e\u0447\u043a\u0443 \u0438 \u043f\u043e\u0441\u043b\u0435 \u0437\u0430\u0447\u0438\u0441\u0442\u043a\u0438 \u043f\u0440\u043e\u0432\u0435\u0440\u044f\u0439 \u0437\u0430\u0434\u0430\u043d\u0438\u0435/\u041a\u041f\u041a."
         )
+    quick_cs_cordon_mg = (
+        ("\u0447\u0438\u0441\u0442\u043e\u0435" in lowered and "\u043d\u0435\u0431\u043e" in lowered)
+        and ("\u043a\u043e\u0440\u0434\u043e\u043d" in lowered or "\u0432\u043e\u044f\u043a" in lowered or "\u043f\u0443\u043b\u0435\u043c" in lowered or "\u0432\u043e\u0435\u043d" in lowered)
+    )
+    if quick_cs_cordon_mg:
+        return (
+            "\u0427\u0438\u0441\u0442\u043e\u0435 \u041d\u0435\u0431\u043e, \u041a\u043e\u0440\u0434\u043e\u043d \u0438 \u0432\u043e\u0435\u043d\u043d\u044b\u0439 \u043f\u0443\u043b\u0435\u043c\u0451\u0442: \u044d\u0442\u043e \u0442\u043e\u0442 \u0441\u0430\u043c\u044b\u0439 \u0436\u0451\u0441\u0442\u043a\u0438\u0439 \u0432\u0445\u043e\u0434 \u0441 \u0411\u043e\u043b\u043e\u0442. "
+            "\u041e\u0442 \u043c\u0435\u0441\u0442\u0430 \u0432\u0445\u043e\u0434\u0430 \u0434\u0435\u0440\u0436\u0438\u0441\u044c \u043b\u0435\u0432\u043e\u0439 \u0441\u0442\u043e\u0440\u043e\u043d\u044b/\u0437\u0430\u0431\u043e\u0440\u0430, \u0431\u0435\u0433\u0438 \u043e\u0442 \u0432\u043e\u0435\u043d\u043d\u043e\u0433\u043e \u0431\u043b\u043e\u043a\u043f\u043e\u0441\u0442\u0430, \u0438\u0449\u0438 \u0440\u0430\u0437\u0440\u044b\u0432/\u043f\u0440\u043e\u0445\u043e\u0434 \u0432 \u0437\u0430\u0431\u043e\u0440\u0435 \u0441\u043b\u0435\u0432\u0430 \u0438 \u043f\u043e\u0441\u043b\u0435 \u043d\u0435\u0433\u043e \u0441\u0440\u0430\u0437\u0443 \u0443\u0445\u043e\u0434\u0438 \u043a \u0443\u043a\u0440\u044b\u0442\u0438\u044f\u043c. "
+            "\u0422\u0432\u043e\u044f \u0446\u0435\u043b\u044c — \u0414\u0435\u0440\u0435\u0432\u043d\u044f \u043d\u043e\u0432\u0438\u0447\u043a\u043e\u0432/\u0431\u0443\u043d\u043a\u0435\u0440 \u0443 \u0412\u043e\u043b\u043a\u0430, \u043d\u0435 \u0441\u0430\u043c \u0431\u043b\u043e\u043a\u043f\u043e\u0441\u0442. "
+            "\u0415\u0441\u043b\u0438 \u043d\u0435 \u0443\u0441\u043f\u0435\u0432\u0430\u0435\u0448\u044c \u0438 \u043f\u0443\u043b\u0435\u043c\u0451\u0442 \u0441\u043d\u043e\u0441\u0438\u0442 \u0441\u0440\u0430\u0437\u0443: \u0432\u0435\u0440\u043d\u0438\u0441\u044c \u043d\u0430 \u0411\u043e\u043b\u043e\u0442\u0430 \u0438 \u0437\u0430\u0439\u0434\u0438 \u043d\u0430 \u041a\u043e\u0440\u0434\u043e\u043d \u0447\u0435\u0440\u0435\u0437 \u0441\u0435\u0432\u0435\u0440\u043d\u044b\u0439/\u0441\u0435\u0432\u0435\u0440\u043e-\u0432\u043e\u0441\u0442\u043e\u0447\u043d\u044b\u0439 \u043f\u0435\u0440\u0435\u0445\u043e\u0434 \u0441 \u0411\u043e\u043b\u043e\u0442: \u0442\u0430\u043a \u043c\u043e\u0436\u043d\u043e \u043e\u0431\u043e\u0439\u0442\u0438 \u0441\u0435\u043a\u0442\u043e\u0440 \u043e\u0431\u0441\u0442\u0440\u0435\u043b\u0430 \u0438 \u0432\u044b\u0439\u0442\u0438 \u0431\u043b\u0438\u0436\u0435 \u043a \u0431\u0430\u0437\u0435 \u043e\u0434\u0438\u043d\u043e\u0447\u0435\u043a."
+        )
     quick_unknown_weapon = (
         "\u043d\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043d" in lowered and "\u043e\u0440\u0443\u0436" in lowered
     ) or "\u0433\u0430\u0443\u0441" in lowered or "gauss" in lowered
@@ -268,6 +312,20 @@ def local_fallback_answer(question: str) -> str:
         if language == "English":
             return "OpenAI is unavailable right now, so I answer from the local Anthology guides:\nWeapon jam/unjam is configured in MCM: `MCM -> WPO -> WPO weapon -> unjam key`. Also check `MCM -> MCM MENU -> All assigned keys -> WPO: inspect / unjam`."
         return "OpenAI \u0441\u0435\u0439\u0447\u0430\u0441 \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d, \u043f\u043e\u044d\u0442\u043e\u043c\u0443 \u043e\u0442\u0432\u0435\u0447\u0430\u044e \u0438\u0437 \u043b\u043e\u043a\u0430\u043b\u044c\u043d\u044b\u0445 \u0433\u0430\u0439\u0434\u043e\u0432 Anthology:\n\u0421\u043d\u044f\u0442\u0438\u0435 \u043a\u043b\u0438\u043d\u0430 \u043d\u0430\u0441\u0442\u0440\u0430\u0438\u0432\u0430\u0435\u0442\u0441\u044f \u0447\u0435\u0440\u0435\u0437 MCM: `MCM -> WPO -> WPO \u043e\u0440\u0443\u0436\u0438\u0435 -> \u041a\u043b\u0430\u0432\u0438\u0448\u0430 \u0441\u043d\u044f\u0442\u0438\u044f \u043a\u043b\u0438\u043d\u0430`. \u0415\u0449\u0451 \u043f\u0440\u043e\u0432\u0435\u0440\u044c `MCM -> MCM MENU -> \u0412\u0441\u0435 \u043d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u043d\u044b\u0435 \u043a\u043b\u0430\u0432\u0438\u0448\u0438 -> WPO: \u041e\u0441\u043c\u043e\u0442\u0440 / \u0443\u0441\u0442\u0440\u0430\u043d\u0438\u0442\u044c \u043a\u043b\u0438\u043d`."
+
+    early_story_mode = any(word in lowered for word in (
+        "\u0442\u0435\u043d\u044c", "\u0447\u0435\u0440\u043d\u043e\u0431", "\u0447\u0438\u0441\u0442\u043e\u0435", "\u0447\u0438\u0441\u0442\u043e\u043c", "\u0447\u0438\u0441\u0442\u043e\u0433\u043e", "\u0447\u043d", "\u043d\u0435\u0431\u043e", "\u043d\u0435\u0431\u0435", "\u0437\u043e\u0432", "\u043f\u0440\u0438\u043f\u044f\u0442",
+        "\u0441\u044e\u0436\u0435\u0442", "\u043a\u0432\u0435\u0441\u0442", "\u043a\u043e\u0440\u0434\u043e\u043d", "\u0441\u0432\u0430\u043b\u043a", "\u0430\u0433\u0440\u043e\u043f\u0440\u043e\u043c", "\u0431\u043e\u043b\u043e\u0442",
+        "\u044f\u043d\u0442\u0430\u0440", "\u0440\u0430\u0434\u0430\u0440", "\u043b\u0438\u043c\u0430\u043d\u0441\u043a", "\u0447\u0430\u044d\u0441",
+    ))
+    early_route_mode = any(word in lowered for word in (
+        "\u043a\u0443\u0434\u0430", "\u0438\u0434\u0442\u0438", "\u0431\u0435\u0436\u0430\u0442\u044c", "\u0434\u0432\u0438\u0433\u0430\u0442\u044c", "\u0441\u0442\u043e\u0440\u043e\u043d",
+        "\u043b\u0435\u0432\u043e", "\u043f\u0440\u0430\u0432\u043e", "\u043f\u0440\u044f\u043c\u043e", "\u043d\u0430\u0437\u0430\u0434", "\u043c\u0430\u0440\u043a\u0435\u0440",
+        "\u0437\u0430\u0441\u0442\u0440\u044f\u043b", "\u043f\u0435\u0440\u0435\u0445\u043e\u0434", "\u043b\u043e\u043a\u0430\u0446", "\u0434\u043e\u0440\u043e\u0433", "\u043f\u0443\u0442\u044c", "\u043e\u0440\u0438\u0435\u043d\u0442\u0438\u0440",
+        "where", "go", "route", "marker", "stuck",
+    ))
+    if early_story_mode and early_route_mode:
+        return story_route_answer(lowered, language)
 
     stopwords = {
         "\u0447\u0442\u043e", "\u043a\u0430\u043a", "\u0433\u0434\u0435", "\u0435\u0441\u043b\u0438", "\u0438\u043b\u0438",
@@ -335,6 +393,13 @@ def local_fallback_answer(question: str) -> str:
     ambiguous_gap = 2 if story_mode else 4
     ambiguous = second_score and best_score - second_score < ambiguous_gap
     if not best_chunk or best_score < required_score or ambiguous:
+        route_mode = any(word in lowered for word in (
+            "\u043a\u0443\u0434\u0430", "\u0438\u0434\u0442\u0438", "\u0431\u0435\u0436\u0430\u0442\u044c", "\u0434\u0432\u0438\u0433\u0430\u0442\u044c", "\u0441\u0442\u043e\u0440\u043e\u043d",
+            "\u043b\u0435\u0432\u043e", "\u043f\u0440\u0430\u0432\u043e", "\u043f\u0440\u044f\u043c\u043e", "\u043d\u0430\u0437\u0430\u0434", "\u043c\u0430\u0440\u043a\u0435\u0440",
+            "\u0437\u0430\u0441\u0442\u0440\u044f\u043b", "\u043f\u0435\u0440\u0435\u0445\u043e\u0434", "\u043b\u043e\u043a\u0430\u0446", "where", "go", "route", "marker", "stuck",
+        ))
+        if story_mode and route_mode:
+            return story_route_answer(lowered, language)
         if language == "English":
             return "I did not find a reliable exact answer in the local Anthology guides. Please ask a moderator or rephrase with the exact error/menu/mod name."
         return "Я не нашёл надёжный точный ответ в локальных гайдах Anthology. Лучше уточнить у модератора или переформулировать с точной ошибкой, меню или названием мода."
@@ -398,6 +463,8 @@ async def ask_yura(question: str, author_name: str) -> str:
         f"You are {BOT_DISPLAY_NAME}, the Discord assistant for A.N.T.H.O.L.O.G.Y / S.T.A.L.K.E.R. Anthology players. "
         "Answer only about Anthology, Anomaly, MO2, MCM, launcher/update issues, performance, installation, and server rules. "
         "Start with a concrete answer, then add a short explanation if useful. "
+        "For story/navigation questions, behave like a guide: name the location chain, nearest landmark, transition, NPC, and what to do if the marker is missing. "
+        "Use left/right/straight/back only when the entry point or landmark is known; otherwise orient by map names, transitions, buildings, bases, and NPCs. "
         "If the user asks in English, answer in English. If the user asks in Russian, answer in Russian. "
         "Do not invent download links, versions, or server facts. If the local knowledge does not contain the answer, say that it should be checked in the Anthology Discord and added to the knowledge base. "
         f"Detected user language: {language}.\n\n"
