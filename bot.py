@@ -131,6 +131,40 @@ def match_score(text: str, tokens: list[str], *, title: bool = False) -> int:
     return score
 
 
+def wanted_story_game(text: str) -> str | None:
+    text = (text or "").casefold()
+    if "\u0437\u043e\u0432" in text and "\u043f\u0440\u0438\u043f\u044f\u0442" in text:
+        return "cop"
+    if ("\u0442\u0435\u043d\u044c" in text and "\u0447\u0435\u0440\u043d\u043e\u0431" in text) or "\u0442\u0447" in text:
+        return "soc"
+    if "\u0447\u0438\u0441\u0442\u043e\u0435" in text and "\u043d\u0435\u0431\u043e" in text:
+        return "cs"
+    return None
+
+
+def story_game_score(text: str, wanted: str | None) -> int:
+    if not wanted:
+        return 0
+    text = (text or "").casefold()
+    markers = {
+        "cop": ("\u0437\u043e\u0432 \u043f\u0440\u0438\u043f\u044f\u0442", "\u0437\u043f:", "\u0437\u043f "),
+        "soc": ("\u0442\u0435\u043d\u044c \u0447\u0435\u0440\u043d\u043e\u0431", "\u0442\u0447:", "\u0442\u0447 "),
+        "cs": ("\u0447\u0438\u0441\u0442\u043e\u0435 \u043d\u0435\u0431\u043e", "\u0447\u043d:", "\u0447\u043d "),
+    }
+    own = any(marker in text for marker in markers[wanted])
+    other = any(
+        marker in text
+        for game, game_markers in markers.items()
+        if game != wanted
+        for marker in game_markers
+    )
+    if other and not own:
+        return -80
+    if own:
+        return 16
+    return 0
+
+
 
 def local_fallback_answer(question: str) -> str:
     question = (question or "").strip()
@@ -175,6 +209,16 @@ def local_fallback_answer(question: str) -> str:
             "\u041e\u0431\u044b\u0447\u043d\u044b\u043c \u043f\u0443\u0442\u0451\u043c \u0442\u0443\u0434\u0430 \u043d\u0435 \u043f\u0440\u043e\u0439\u0442\u0438: \u043d\u0443\u0436\u043d\u043e \u043d\u0430\u0439\u0442\u0438 \u041d\u043e\u044f \u043d\u0430 \u0441\u0442\u0430\u0440\u043e\u0439 \u0431\u0430\u0440\u0436\u0435, \u043e\u043d \u043f\u043e\u043a\u0430\u0436\u0435\u0442 \u043c\u0430\u0440\u0448\u0440\u0443\u0442 \u043d\u0430 \u043f\u043b\u0430\u0442\u043e. "
             "\u041d\u0430 \u043c\u0435\u0441\u0442\u0435 \u043e\u0441\u043c\u043e\u0442\u0440\u0438 \u0421\u043a\u0430\u0442-3 \u0438 \u0437\u0430\u0431\u0435\u0440\u0438 \u0441\u044e\u0436\u0435\u0442\u043d\u044b\u0435 \u0434\u0430\u043d\u043d\u044b\u0435 \u0434\u043b\u044f \u0440\u0430\u0441\u0441\u043b\u0435\u0434\u043e\u0432\u0430\u043d\u0438\u044f \u043e\u043f\u0435\u0440\u0430\u0446\u0438\u0438 \u00ab\u0424\u0430\u0440\u0432\u0430\u0442\u0435\u0440\u00bb."
         )
+    quick_x8 = (
+        ("x-8" in lowered or "\u0445-8" in lowered)
+        and ("\u0437\u043e\u0432" in lowered or "\u043f\u0440\u0438\u043f\u044f\u0442" in lowered)
+    )
+    if quick_x8:
+        return (
+            "\u0417\u043e\u0432 \u041f\u0440\u0438\u043f\u044f\u0442\u0438, \u043b\u0430\u0431\u043e\u0440\u0430\u0442\u043e\u0440\u0438\u044f X-8: \u044d\u0442\u043e \u044d\u0442\u0430\u043f \u0443\u0436\u0435 \u0432 \u041f\u0440\u0438\u043f\u044f\u0442\u0438, \u0430 \u043d\u0435 \u0422\u0435\u043d\u044c \u0427\u0435\u0440\u043d\u043e\u0431\u044b\u043b\u044f. "
+            "\u0418\u0434\u0438 \u043f\u043e \u0441\u044e\u0436\u0435\u0442\u043d\u044b\u043c \u0437\u0430\u0434\u0430\u043d\u0438\u044f\u043c \u0432 \u041f\u0440\u0438\u043f\u044f\u0442\u0438 \u043a \u0432\u0445\u043e\u0434\u0443 \u0432 X-8, \u0437\u0430\u0447\u0438\u0441\u0442\u0438 \u043b\u0430\u0431\u043e\u0440\u0430\u0442\u043e\u0440\u0438\u044e \u0438 \u0441\u043e\u0431\u0435\u0440\u0438 \u0441\u044e\u0436\u0435\u0442\u043d\u044b\u0435 \u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b/\u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u044b. "
+            "\u041e\u043d\u0438 \u043d\u0443\u0436\u043d\u044b \u0434\u043b\u044f \u0440\u0430\u0437\u0433\u0430\u0434\u043a\u0438 \u0433\u0430\u0443\u0441\u0441-\u043f\u0443\u0448\u043a\u0438/\u00ab\u043d\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043d\u043e\u0433\u043e \u043e\u0440\u0443\u0436\u0438\u044f\u00bb \u0443 \u041a\u0430\u0440\u0434\u0430\u043d\u0430 \u0438 \u0434\u043b\u044f \u0434\u0430\u043b\u044c\u043d\u0435\u0439\u0448\u0435\u0433\u043e \u0444\u0438\u043d\u0430\u043b\u044c\u043d\u043e\u0433\u043e \u044d\u0442\u0430\u043f\u0430 \u0417\u041f."
+        )
     quick_unknown_weapon = (
         "\u043d\u0435\u0438\u0437\u0432\u0435\u0441\u0442\u043d" in lowered and "\u043e\u0440\u0443\u0436" in lowered
     ) or "\u0433\u0430\u0443\u0441" in lowered or "gauss" in lowered
@@ -217,7 +261,7 @@ def local_fallback_answer(question: str) -> str:
     tokens = [
         token
         for token in re.findall(r"[A-Za-z\u0400-\u04FF0-9_\\-]+", lowered)
-        if len(token) >= 4 and token not in stopwords
+        if (len(token) >= 4 or re.fullmatch(r"[x\u0445]-\d+", token)) and token not in stopwords
     ]
     chunks = [
         chunk.strip()
@@ -232,10 +276,12 @@ def local_fallback_answer(question: str) -> str:
     best_score = 0
     best_chunk = ""
     second_score = 0
+    wanted_game = wanted_story_game(lowered)
     for chunk in chunks:
         c = chunk.casefold()
         score = 0
         score += match_score(c, tokens)
+        score += story_game_score(c[:600], wanted_game)
         if chunks and chunk.startswith("## "):
             title = chunk.splitlines()[0].casefold()
             score += match_score(title, tokens, title=True)
@@ -313,8 +359,11 @@ def cleanup_question(message: discord.Message) -> str:
 
 
 def user_language_hint(question: str) -> str:
-    latin = len(re.findall(r"[A-Za-z]", question or ""))
-    cyrillic = len(re.findall(r"[\u0400-\u04FF]", question or ""))
+    cleaned = re.sub(r"(?i)\bx\s*-?\s*\d+\b", "", question or "")
+    latin = len(re.findall(r"[A-Za-z]", cleaned))
+    cyrillic = len(re.findall(r"[\u0400-\u04FF]", cleaned))
+    if cyrillic >= 5:
+        return "Russian"
     if latin and latin >= max(1, cyrillic * 2):
         return "English"
     return "Russian"
