@@ -122,8 +122,14 @@ def local_fallback_answer(question: str) -> str:
         for chunk in re.split(r"\n(?=#{1,3} )", KNOWLEDGE)
         if chunk.strip()
     ]
+    if not tokens:
+        if language == "English":
+            return "I need a more specific question. Mention the topic, error, menu, mod, or exact problem."
+        return "Нужен более конкретный вопрос: укажи ошибку, меню, мод, настройку или проблему."
+
     best_score = 0
     best_chunk = ""
+    second_score = 0
     for chunk in chunks:
         c = chunk.casefold()
         score = 0
@@ -144,13 +150,20 @@ def local_fallback_answer(question: str) -> str:
         if "mcm" in lowered and "mcm" in c:
             score += 4
         if score > best_score:
+            second_score = best_score
             best_score = score
             best_chunk = chunk
+        elif score > second_score:
+            second_score = score
 
-    if not best_chunk or best_score < 3:
+    required_score = max(10, len(tokens) * 5)
+    if len(tokens) == 1:
+        required_score = 12
+    ambiguous = second_score and best_score - second_score < 4
+    if not best_chunk or best_score < required_score or ambiguous:
         if language == "English":
-            return "OpenAI is unavailable right now, and I did not find an exact answer in the local Anthology guides. Please check the Anthology Discord and add the answer to the helper knowledge base."
-        return "OpenAI \u0441\u0435\u0439\u0447\u0430\u0441 \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d, \u0430 \u0432 \u043b\u043e\u043a\u0430\u043b\u044c\u043d\u043e\u0439 \u0431\u0430\u0437\u0435 \u044f \u043d\u0435 \u043d\u0430\u0448\u0451\u043b \u0442\u043e\u0447\u043d\u043e\u0433\u043e \u043e\u0442\u0432\u0435\u0442\u0430. \u041b\u0443\u0447\u0448\u0435 \u0443\u0442\u043e\u0447\u043d\u0438\u0442\u044c \u0432 Discord Anthology \u0438 \u043f\u043e\u0442\u043e\u043c \u0434\u043e\u0431\u0430\u0432\u0438\u0442\u044c \u043e\u0442\u0432\u0435\u0442 \u0432 \u0431\u0430\u0437\u0443 \u043f\u043e\u043c\u043e\u0449\u043d\u0438\u043a\u0430."
+            return "I did not find a reliable exact answer in the local Anthology guides. Please ask a moderator or rephrase with the exact error/menu/mod name."
+        return "Я не нашёл надёжный точный ответ в локальных гайдах Anthology. Лучше уточнить у модератора или переформулировать с точной ошибкой, меню или названием мода."
 
     cleaned = re.sub(r"^## .+?\n", "", best_chunk, count=1).strip()
     cleaned = trim_answer(cleaned)
