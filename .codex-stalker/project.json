@@ -1,0 +1,9 @@
+{
+  "name": "anthology-discord-bot",
+  "kind": "discord-bot",
+  "description": "Anthology Discord AI helper bot named Юра Семецкий.",
+  "entrypoint": "bot.py",
+  "owner": "Alex020104",
+  "github_repo": "Alex020104/anthology-discord-bot"
+}
+

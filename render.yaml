@@ -1,0 +1,16 @@
+services:
+  - type: worker
+    name: anthology-discord-bot
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
+    envVars:
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-5.6-luna
+      - key: BOT_DISPLAY_NAME
+        value: Юра Семецкий
