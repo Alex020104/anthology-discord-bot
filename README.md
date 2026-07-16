@@ -71,3 +71,39 @@ BOT_DISPLAY_NAME=Юра Семецкий
 - Use Slash Commands
 
 Если хочешь, чтобы бот сам ставил себе ник `Юра Семецкий`, дай ему право Manage Nicknames.
+
+## Локальный helper сохраняется
+
+Этот Discord-бот не заменяет локальный `anthology-ai-helper`, который используется Relay Chat внутри игры.
+
+Локальный режим:
+
+```text
+Relay Chat -> http://127.0.0.1:8787/ask -> anthology-ai-helper
+```
+
+Discord режим:
+
+```text
+Discord -> Юра Семецкий -> OpenAI + knowledge/
+```
+
+Bridge режим:
+
+```text
+Relay Chat -> local anthology-ai-helper -> cloud Юра Семецкий -> OpenAI + knowledge/
+```
+
+Если облачный Юра недоступен, локальный helper отвечает сам из локальной базы.
+
+Подробнее смотри:
+
+```text
+docs/local-and-discord-modes.md
+```
+
+Чтобы скопировать свежие гайды из локального helper в Discord-бота:
+
+```powershell
+.\scripts\sync_knowledge_from_local_helper.ps1
+```

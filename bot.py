@@ -6,9 +6,12 @@ import re
 from pathlib import Path
 
 import discord
+import uvicorn
 from discord import app_commands
 from discord.ext import commands
 from dotenv import load_dotenv
+from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi.responses import PlainTextResponse
 from openai import AsyncOpenAI
 
 
@@ -27,6 +30,8 @@ BOT_TRIGGER_NAMES = [
     if item.strip()
 ]
 DISCORD_GUILD_ID = os.getenv("DISCORD_GUILD_ID", "").strip()
+BRIDGE_TOKEN = os.getenv("BRIDGE_TOKEN", "").strip()
+PORT = int(os.getenv("PORT", "8787"))
 MAX_KNOWLEDGE_CHARS = int(os.getenv("MAX_KNOWLEDGE_CHARS", "24000"))
 MAX_ANSWER_CHARS = int(os.getenv("MAX_ANSWER_CHARS", "1600"))
 
@@ -41,6 +46,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
+app = FastAPI(title="Anthology Discord Bot Bridge")
 
 
 def load_knowledge() -> str:
@@ -136,6 +142,28 @@ async def answer_discord(destination: discord.abc.Messageable, question: str, au
     await destination.send(answer)
 
 
+def check_bridge_token(value: str | None) -> None:
+    if not BRIDGE_TOKEN:
+        return
+    if not value or value.strip() != BRIDGE_TOKEN:
+        raise HTTPException(status_code=401, detail="Invalid bridge token.")
+
+
+@app.get("/health", response_class=PlainTextResponse)
+async def health() -> str:
+    return "ok"
+
+
+@app.post("/ask", response_class=PlainTextResponse)
+async def bridge_ask(request: Request, x_anthology_bridge_token: str | None = Header(default=None)) -> str:
+    check_bridge_token(x_anthology_bridge_token)
+    body = await request.body()
+    question = body.decode("utf-8", errors="replace").strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="Empty question.")
+    return await ask_yura(question[:700], "Relay Chat")
+
+
 @bot.event
 async def on_ready() -> None:
     print(f"✅ {BOT_DISPLAY_NAME} logged in as {bot.user} and is ready.")
@@ -196,5 +224,18 @@ async def reload_knowledge_command(interaction: discord.Interaction) -> None:
     await interaction.response.send_message("Knowledge base reloaded.", ephemeral=True)
 
 
+async def run_http_server() -> None:
+    config = uvicorn.Config(app, host="0.0.0.0", port=PORT, log_level="info")
+    server = uvicorn.Server(config)
+    await server.serve()
+
+
+async def main() -> None:
+    await asyncio.gather(
+        bot.start(DISCORD_TOKEN),
+        run_http_server(),
+    )
+
+
 if __name__ == "__main__":
-    asyncio.run(bot.start(DISCORD_TOKEN))
+    asyncio.run(main())

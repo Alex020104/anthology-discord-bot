@@ -1,5 +1,5 @@
 services:
-  - type: worker
+  - type: web
     name: anthology-discord-bot
     env: python
     plan: free
@@ -14,3 +14,5 @@ services:
         value: gpt-5.6-luna
       - key: BOT_DISPLAY_NAME
         value: Юра Семецкий
+      - key: BRIDGE_TOKEN
+        generateValue: true
