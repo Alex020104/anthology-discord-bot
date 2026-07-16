@@ -19,6 +19,19 @@ def masked(value: str) -> str:
     return value[:4] + "..." + value[-4:]
 
 
+def is_placeholder(value: str) -> bool:
+    lowered = (value or "").strip().lower()
+    return (
+        not lowered
+        or "paste_" in lowered
+        or "put_" in lowered
+        or "change-me" in lowered
+        or "твой_" in lowered
+        or "новый_" in lowered
+        or "любая_" in lowered
+    )
+
+
 def main() -> int:
     print("Anthology Discord Bot setup check")
     print("root:", ROOT)
@@ -40,11 +53,11 @@ def main() -> int:
     print("knowledge files:", len(knowledge))
 
     missing = []
-    if not discord_token:
+    if is_placeholder(discord_token):
         missing.append("DISCORD_TOKEN")
-    if not openai_key:
+    if is_placeholder(openai_key):
         missing.append("OPENAI_API_KEY")
-    if not model:
+    if is_placeholder(model):
         missing.append("OPENAI_MODEL")
 
     if missing:
@@ -67,4 +80,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
