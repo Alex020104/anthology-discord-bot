@@ -19,7 +19,7 @@ Discord Developer Portal -> Bot:
 ```text
 DISCORD_TOKEN=новый_токен_discord_бота
 OPENAI_API_KEY=ключ_openai
-OPENAI_MODEL=gpt-5.6-luna
+OPENAI_MODEL=gpt-4.1-mini
 BOT_DISPLAY_NAME=Юра Семецкий
 BRIDGE_TOKEN=любая_длинная_случайная_строка
 ```

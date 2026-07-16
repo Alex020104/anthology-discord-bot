@@ -22,7 +22,7 @@ load_dotenv(ROOT / ".env")
 
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN", "").strip()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.6-luna").strip()
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini").strip()
 BOT_DISPLAY_NAME = os.getenv("BOT_DISPLAY_NAME", "Юра Семецкий").strip()
 BOT_TRIGGER_NAMES = [
     item.strip().casefold()

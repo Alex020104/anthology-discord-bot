@@ -2,7 +2,7 @@
 
 Discord-бот помощник для сервера A.N.T.H.O.L.O.G.Y.
 
-Он отвечает по гайдам из папки `knowledge/`, использует OpenAI Responses API и по умолчанию экономичную модель `gpt-5.6-luna`.
+Он отвечает по гайдам из папки `knowledge/`, использует OpenAI Responses API и по умолчанию mini-модель `gpt-4.1-mini`.
 
 ## Важно про токены
 
@@ -21,6 +21,7 @@ py -3 -m venv .venv
 .\.venv\Scripts\pip install -r requirements.txt
 Copy-Item .env.example .env
 notepad .env
+.\.venv\Scripts\python scripts\check_setup.py
 .\.venv\Scripts\python bot.py
 ```
 
@@ -50,7 +51,7 @@ notepad .env
 ```text
 DISCORD_TOKEN=...
 OPENAI_API_KEY=...
-OPENAI_MODEL=gpt-5.6-luna
+OPENAI_MODEL=gpt-4.1-mini
 BOT_DISPLAY_NAME=Юра Семецкий
 ```
 
