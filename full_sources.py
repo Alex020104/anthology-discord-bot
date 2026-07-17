@@ -23,6 +23,22 @@ GAME_HINTS = {
     "Чистое Небо": ("чист", "небо", "clear", "sky"),
 }
 
+GAME_ALIAS_TOKENS = {
+    alias
+    for aliases in GAME_HINTS.values()
+    for alias in aliases
+    if len(alias) >= 3 and alias not in {"soc", "cop"}
+}
+
+STORY_HINTS = (
+    "сюжет", "квест", "задание", "маркер", "куда идти", "что должно произойти",
+    "тайник", "лаборатор", "подземель", "локац", "npc", "нпс", "сталкер",
+    "стрелок", "круглов", "сахаров", "волк", "сидорович", "глухар", "тремор",
+    "кардан", "азот", "соколов", "тополь", "зверобой", "ной", "лоцман",
+    "кордон", "затон", "юпитер", "припять", "агропром", "свалка", "бар",
+    "янтар", "рыж", "чаэс", "х-8", "х8", "x-8", "x8", "скат-", "б2", "б28",
+)
+
 
 def normalize(text: str) -> str:
     text = (text or "").casefold().replace("ё", "е")
@@ -63,6 +79,15 @@ def wanted_game(question: str) -> str:
         if any(alias in q for alias in aliases):
             return game
     return ""
+
+
+def looks_like_story_question(question: str) -> bool:
+    q = normalize(question)
+    if wanted_game(q):
+        return True
+    if re.search(r"\bскат\s*-?\s*\d+\b", q):
+        return True
+    return any(hint in q for hint in STORY_HINTS)
 
 
 def split_sections(text: str, source_name: str) -> list[dict]:
@@ -155,13 +180,20 @@ def score_chunk(chunk: dict, tokens: list[str], question: str, game: str) -> int
     if game:
         score += 70 if game.casefold() in haystack else -90
     for token in tokens:
+        if token in GAME_ALIAS_TOKENS:
+            continue
         variants = token_variants(token)
         if any(v in title for v in variants):
-            score += 18
+            score += 45
         if any(v in haystack for v in variants):
             score += 8
     q = normalize(question)
-    for important in ("глухар", "тремор", "кровосос", "кардан", "азот", "химера", "ноутбук", "наемник", "соколов", "тополь", "пулемет", "кордон", "припят", "х-8"):
+    for exact in re.findall(r"[a-zа-я]+-?\d+", q):
+        if exact and exact in title:
+            score += 90
+        elif exact and exact in haystack:
+            score += 35
+    for important in ("глухар", "тремор", "кровосос", "кардан", "азот", "химера", "ноутбук", "наемник", "соколов", "тополь", "пулемет", "кордон", "припят", "х-8", "скат"):
         if important in q:
             score += 35 if important in haystack else -12
     return score
@@ -180,6 +212,8 @@ def trim_answer(text: str, max_chars: int) -> str:
 def find_answer(question: str, root: str, min_score: int = 34, max_chars: int = 1800) -> str | None:
     chunks = load_chunks(root)
     if not chunks:
+        return None
+    if not looks_like_story_question(question):
         return None
     tokens = tokenize(question)
     if not tokens:

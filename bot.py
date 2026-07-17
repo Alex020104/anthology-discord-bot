@@ -714,7 +714,7 @@ def looks_like_followup(question: str) -> bool:
         "кардан", "азот", "соколов", "тополь", "стрелок", "круглов", "волк",
         "кордон", "затор", "юпитер", "припять", "агропром", "х-8", "x-8",
     ))
-    return (len(words) <= 9 or any(word in q for word in followup_words)) and not has_explicit_topic
+    return any(word in q for word in followup_words) and not has_explicit_topic
 
 
 def context_key_from_message(message: discord.Message) -> str:
