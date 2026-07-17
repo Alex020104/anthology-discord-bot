@@ -662,10 +662,111 @@ def user_language_hint(question: str) -> str:
     return "Russian"
 
 
+def split_sentences(text: str) -> list[str]:
+    cleaned = re.sub(r"\s+", " ", text or "").strip()
+    if not cleaned:
+        return []
+    return [s.strip(" \t\r\n") for s in re.split(r"(?<=[.!?])\s+", cleaned) if s.strip()]
+
+
+def local_story_answer_from_context(question: str, context: dict, max_chars: int = MAX_ANSWER_CHARS) -> str:
+    title = context.get("title") or "Источник"
+    source = context.get("source") or "гайд"
+    text = context.get("text") or ""
+    q = (question or "").casefold().replace("ё", "е")
+    sentences = split_sentences(text)
+
+    direct = ""
+    if any(word in q for word in ("убить", "перебить", "застрелить", "атаковать")):
+        if re.search(r"\b(убить|перебить|расправ|атак|рейд|бой|бандит)", text.casefold().replace("ё", "е")):
+            direct = "Да, можно."
+        else:
+            direct = "В тексте гайда прямого варианта с убийством не подтверждено."
+    elif any(word in q for word in ("спасти", "жив", "выживет")):
+        low = text.casefold().replace("ё", "е")
+        if any(mark in low for mark in ("не удалось", "погиб", "мертв", "мёртв", "умер")):
+            direct = "Судя по гайду, нет — спасти не получится."
+        elif any(mark in low for mark in ("спасти", "выручить", "выживет", "освободить")):
+            direct = "Да, по гайду это можно сделать."
+    elif any(word in q for word in ("можно", "можно ли", "получится")):
+        direct = "По гайду — да, если выполнить описанный вариант." if sentences else ""
+
+    consequence_words = (
+        "если", "после", "когда", "в итоге", "тогда", "награ", "получ", "вариант",
+        "выберите", "придется", "придётся", "вернит", "отпуст", "начнут", "обыск",
+    )
+    picked: list[str] = []
+    for sentence in sentences:
+        low = sentence.casefold().replace("ё", "е")
+        if any(word in low for word in consequence_words):
+            picked.append(sentence)
+        if len(picked) >= 4:
+            break
+    if not direct:
+        picked = sentences[:4]
+    elif not picked:
+        picked = sentences[:4]
+
+    body = " ".join(picked).strip()
+    if direct:
+        answer = f"{direct} {body}"
+    else:
+        answer = body
+    if len(answer) > max_chars:
+        answer = answer[:max_chars].rsplit(".", 1)[0].strip() or answer[:max_chars].rstrip(" ,;:")
+        answer += "..."
+    return f"{title} ({source}): {answer}"
+
+
+def is_direct_decision_question(question: str) -> bool:
+    q = (question or "").casefold().replace("ё", "е")
+    return any(mark in q for mark in (
+        "можно", "нельзя", "стоит ли", "надо ли", "обязательно", "будет ли",
+        "убить", "перебить", "застрелить", "атаковать", "спасти", "выживет",
+        "что будет", "последств",
+    ))
+
+
+async def answer_from_story_context(question: str, author_name: str, context: dict) -> str:
+    if is_direct_decision_question(question):
+        return local_story_answer_from_context(question, context)
+    if not OPENAI_ENABLED:
+        return local_story_answer_from_context(question, context)
+    language = user_language_hint(question)
+    system_prompt = (
+        f"You are {BOT_DISPLAY_NAME}, a live Discord helper for S.T.A.L.K.E.R. Anthology players. "
+        "Use only the provided guide fragment. Do not copy it verbatim as a wall of text. "
+        "Answer the player's exact question first. If it asks yes/no, start with yes/no/maybe and explain why. "
+        "Then explain consequences, what will happen, where to go, and what to do next. "
+        "If the fragment does not support a yes/no conclusion, say so honestly. "
+        "Keep it concise, practical, and human. "
+        "Answer in English if the player asks in English; otherwise answer in Russian. "
+        f"Detected language: {language}."
+    )
+    guide = (
+        f"Game/source: {context.get('source')}\n"
+        f"Quest/section: {context.get('title')}\n"
+        f"Guide fragment:\n{context.get('text', '')[:5000]}"
+    )
+    response = await openai_client.responses.create(
+        model=OPENAI_MODEL,
+        input=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"{author_name}: {question}\n\n{guide}"},
+        ],
+        max_output_tokens=450,
+    )
+    return trim_answer(response.output_text)
+
+
 async def ask_yura(question: str, author_name: str) -> str:
-    full_answer = full_sources.find_answer(question, str(ROOT), max_chars=MAX_ANSWER_CHARS)
-    if full_answer:
-        return trim_answer(full_answer)
+    full_context = full_sources.find_context(question, str(ROOT))
+    if full_context:
+        try:
+            return await answer_from_story_context(question, author_name, full_context)
+        except Exception as exc:
+            print(f"OpenAI story answer failed: {type(exc).__name__}: {exc}")
+            return local_story_answer_from_context(question, full_context)
     qa_answer = story_qa.find_answer(question, str(ROOT))
     if qa_answer:
         return trim_answer(qa_answer)
@@ -733,11 +834,9 @@ def with_conversation_context(question: str, context_key: str | None) -> str:
 def remember_conversation_context(context_key: str | None, question: str, answer: str) -> None:
     if not context_key:
         return
-    compact_answer = re.sub(r"\s+", " ", answer or "").strip()
     compact_question = re.sub(r"\s+", " ", question or "").strip()
     CONVERSATION_CONTEXT[context_key] = (
-        f"Предыдущий вопрос игрока: {compact_question}\n"
-        f"Предыдущий ответ Юры: {compact_answer[:900]}"
+        f"Предыдущий вопрос игрока: {compact_question}"
     )
     if len(CONVERSATION_CONTEXT) > 300:
         for key in list(CONVERSATION_CONTEXT)[:80]:

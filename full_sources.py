@@ -179,6 +179,9 @@ def score_chunk(chunk: dict, tokens: list[str], question: str, game: str) -> int
     score = 0
     if game:
         score += 70 if game.casefold() in haystack else -90
+    q = normalize(question)
+    if title and title in q:
+        score += 100
     for token in tokens:
         if token in GAME_ALIAS_TOKENS:
             continue
@@ -187,7 +190,11 @@ def score_chunk(chunk: dict, tokens: list[str], question: str, game: str) -> int
             score += 45
         if any(v in haystack for v in variants):
             score += 8
-    q = normalize(question)
+    if any(word in q for word in ("убить", "перебить", "застрелить", "атаковать")):
+        if any(word in haystack for word in ("перебить", "рейд", "медвед", "атак", "расправ")):
+            score += 65
+        if any(word in haystack for word in ("выкуп", "заплат", "артефакт", "обмен")) and not any(word in haystack for word in ("перебить", "рейд", "атак")):
+            score -= 25
     for exact in re.findall(r"[a-zа-я]+-?\d+", q):
         if exact and exact in title:
             score += 90
@@ -209,7 +216,7 @@ def trim_answer(text: str, max_chars: int) -> str:
     return cut + "..."
 
 
-def find_answer(question: str, root: str, min_score: int = 34, max_chars: int = 1800) -> str | None:
+def find_context(question: str, root: str, min_score: int = 34) -> dict | None:
     chunks = load_chunks(root)
     if not chunks:
         return None
@@ -232,6 +239,18 @@ def find_answer(question: str, root: str, min_score: int = 34, max_chars: int = 
     if best_score < max(min_score, len(tokens) * 5):
         return None
     if best_score < 70 and second_score > 0 and best_score - second_score < 5:
+        return None
+    return {
+        "source": best.get("source") or "full_sources",
+        "title": best.get("title") or best.get("source") or "Источник",
+        "text": best.get("text", ""),
+        "score": best_score,
+    }
+
+
+def find_answer(question: str, root: str, min_score: int = 34, max_chars: int = 1800) -> str | None:
+    best = find_context(question, root, min_score=min_score)
+    if not best:
         return None
     title = best.get("title") or best.get("source") or "Источник"
     source = best.get("source") or "full_sources"
