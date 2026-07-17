@@ -17,6 +17,7 @@ from openai import AsyncOpenAI
 
 import story_qa
 import general_knowledge
+import full_sources
 
 
 ROOT = Path(__file__).resolve().parent
@@ -58,6 +59,7 @@ intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 app = FastAPI(title="Anthology Discord Bot Bridge")
+CONVERSATION_CONTEXT: dict[str, str] = {}
 
 
 def iter_knowledge_paths() -> list[Path]:
@@ -661,6 +663,9 @@ def user_language_hint(question: str) -> str:
 
 
 async def ask_yura(question: str, author_name: str) -> str:
+    full_answer = full_sources.find_answer(question, str(ROOT), max_chars=MAX_ANSWER_CHARS)
+    if full_answer:
+        return trim_answer(full_answer)
     qa_answer = story_qa.find_answer(question, str(ROOT))
     if qa_answer:
         return trim_answer(qa_answer)
@@ -694,16 +699,63 @@ async def ask_yura(question: str, author_name: str) -> str:
     return trim_answer(response.output_text)
 
 
-async def answer_discord(destination: discord.abc.Messageable, question: str, author_name: str) -> None:
+def looks_like_followup(question: str) -> bool:
+    q = (question or "").casefold()
+    if not q:
+        return False
+    words = re.findall(r"[a-zа-я0-9][a-zа-я0-9_+\\-]{1,}", q)
+    followup_words = (
+        "он", "она", "они", "его", "ее", "её", "их", "там", "туда", "дальше",
+        "потом", "после", "спасти", "мертв", "мёртв", "нашел", "нашёл",
+        "куда", "как быть", "что делать", "а если", "а можно", "можно ли",
+    )
+    has_explicit_topic = any(topic in q for topic in (
+        "тень чернобыля", "зов припяти", "чистое небо", "глухарь", "тремор",
+        "кардан", "азот", "соколов", "тополь", "стрелок", "круглов", "волк",
+        "кордон", "затор", "юпитер", "припять", "агропром", "х-8", "x-8",
+    ))
+    return (len(words) <= 9 or any(word in q for word in followup_words)) and not has_explicit_topic
+
+
+def context_key_from_message(message: discord.Message) -> str:
+    return f"{getattr(message.channel, 'id', 'channel')}:{getattr(message.author, 'id', 'author')}"
+
+
+def with_conversation_context(question: str, context_key: str | None) -> str:
+    if not context_key:
+        return question
+    previous = CONVERSATION_CONTEXT.get(context_key, "")
+    if previous and looks_like_followup(question):
+        return f"{previous}\n\nУточнение игрока: {question}"
+    return question
+
+
+def remember_conversation_context(context_key: str | None, question: str, answer: str) -> None:
+    if not context_key:
+        return
+    compact_answer = re.sub(r"\s+", " ", answer or "").strip()
+    compact_question = re.sub(r"\s+", " ", question or "").strip()
+    CONVERSATION_CONTEXT[context_key] = (
+        f"Предыдущий вопрос игрока: {compact_question}\n"
+        f"Предыдущий ответ Юры: {compact_answer[:900]}"
+    )
+    if len(CONVERSATION_CONTEXT) > 300:
+        for key in list(CONVERSATION_CONTEXT)[:80]:
+            CONVERSATION_CONTEXT.pop(key, None)
+
+
+async def answer_discord(destination: discord.abc.Messageable, question: str, author_name: str, context_key: str | None = None) -> None:
     if not question:
         await destination.send("\u041d\u0430\u043f\u0438\u0448\u0438 \u0432\u043e\u043f\u0440\u043e\u0441 \u043f\u043e\u0441\u043b\u0435 \u043e\u0431\u0440\u0430\u0449\u0435\u043d\u0438\u044f: `\u042e\u0440\u0430, ...` \u0438\u043b\u0438 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u0443\u0439 `/ask`.")
         return
+    effective_question = with_conversation_context(question, context_key)
     async with destination.typing():
         try:
-            answer = await ask_yura(question, author_name)
+            answer = await ask_yura(effective_question, author_name)
         except Exception as exc:
             print(f"OpenAI answer failed: {type(exc).__name__}: {exc}")
-            answer = local_fallback_answer(question)
+            answer = local_fallback_answer(effective_question)
+    remember_conversation_context(context_key, question, answer)
     await destination.send(answer)
 
 
@@ -726,11 +778,15 @@ async def bridge_ask(request: Request, x_anthology_bridge_token: str | None = He
     question = body.decode("utf-8", errors="replace").strip()
     if not question:
         raise HTTPException(status_code=400, detail="Empty question.")
+    context_key = f"bridge:{getattr(request.client, 'host', 'local')}"
+    effective_question = with_conversation_context(question[:700], context_key)
     try:
-        return await ask_yura(question[:700], "Relay Chat")
+        answer = await ask_yura(effective_question, "Relay Chat")
     except Exception as exc:
         print(f"OpenAI bridge answer failed: {type(exc).__name__}: {exc}")
-        return local_fallback_answer(question[:700])
+        answer = local_fallback_answer(effective_question)
+    remember_conversation_context(context_key, question[:700], answer)
+    return answer
 
 
 @bot.event
@@ -768,7 +824,7 @@ async def on_message(message: discord.Message) -> None:
     print(f"MESSAGE: guild={getattr(message.guild, 'id', None)} channel={getattr(message.channel, 'id', None)} author={message.author} content_len={len(message.content or '')} mentions_bot={bool(bot.user and bot.user in message.mentions)} triggered={triggered}", flush=True)
     if triggered:
         question = cleanup_question(message)
-        await answer_discord(message.channel, question, message.author.display_name)
+        await answer_discord(message.channel, question, message.author.display_name, context_key_from_message(message))
         return
     await bot.process_commands(message)
 
