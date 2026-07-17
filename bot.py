@@ -243,12 +243,12 @@ def local_fallback_answer(question: str) -> str:
     question = (question or "").strip()
     lowered = question.casefold()
     language = user_language_hint(question)
-    qa_answer = story_qa.find_answer(question, str(ROOT))
-    if qa_answer:
-        return qa_answer
     support_answer = general_knowledge.find_answer(question, str(ROOT), max_chars=MAX_ANSWER_CHARS)
     if support_answer:
         return support_answer
+    qa_answer = story_qa.find_answer(question, str(ROOT))
+    if qa_answer:
+        return qa_answer
     unconfirmed = unknown_or_unconfirmed_quest_answer(lowered, language)
     if unconfirmed:
         return unconfirmed
@@ -779,6 +779,9 @@ async def ask_yura(question: str, author_name: str) -> str:
     quick_answer = quick_story_decision_answer(question)
     if quick_answer:
         return quick_answer
+    support_answer = general_knowledge.find_answer(question, str(ROOT), max_chars=MAX_ANSWER_CHARS)
+    if support_answer:
+        return trim_answer(support_answer)
     full_context = full_sources.find_context(question, str(ROOT))
     if full_context:
         try:
@@ -789,9 +792,6 @@ async def ask_yura(question: str, author_name: str) -> str:
     qa_answer = story_qa.find_answer(question, str(ROOT))
     if qa_answer:
         return trim_answer(qa_answer)
-    support_answer = general_knowledge.find_answer(question, str(ROOT), max_chars=MAX_ANSWER_CHARS)
-    if support_answer:
-        return trim_answer(support_answer)
     if not OPENAI_ENABLED:
         return local_fallback_answer(question)
     language = user_language_hint(question)
