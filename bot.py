@@ -34,7 +34,7 @@ BOT_TRIGGER_NAMES = [
 DISCORD_GUILD_ID = os.getenv("DISCORD_GUILD_ID", "").strip()
 BRIDGE_TOKEN = os.getenv("BRIDGE_TOKEN", "").strip()
 PORT = int(os.getenv("PORT", "8787"))
-MAX_KNOWLEDGE_CHARS = int(os.getenv("MAX_KNOWLEDGE_CHARS", "24000"))
+MAX_KNOWLEDGE_CHARS = int(os.getenv("MAX_KNOWLEDGE_CHARS", "140000"))
 MAX_ANSWER_CHARS = int(os.getenv("MAX_ANSWER_CHARS", "1600"))
 OPENAI_ENABLED = os.getenv("OPENAI_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
 AUTO_REPLY_QUESTION_CHANNEL_IDS = {
@@ -57,19 +57,40 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 app = FastAPI(title="Anthology Discord Bot Bridge")
 
 
+def iter_knowledge_paths() -> list[Path]:
+    paths = sorted(KNOWLEDGE_DIR.rglob("*.md"), key=lambda item: item.name.casefold())
+    story_prefixes = ("quest_", "stalker_")
+    low_priority_prefixes = ("downloads_",)
+    story = [path for path in paths if path.name.casefold().startswith(story_prefixes)]
+    normal = [
+        path
+        for path in paths
+        if path not in story and not path.name.casefold().startswith(low_priority_prefixes)
+    ]
+    low_priority = [path for path in paths if path.name.casefold().startswith(low_priority_prefixes)]
+    return story + normal + low_priority
+
+
 def load_knowledge() -> str:
     parts: list[str] = []
-    for path in sorted(KNOWLEDGE_DIR.rglob("*.md")):
+    total_chars = 0
+    for path in iter_knowledge_paths():
         try:
             text = path.read_text(encoding="utf-8", errors="replace").strip()
         except OSError:
             continue
         if text:
-            parts.append(f"## {path.relative_to(KNOWLEDGE_DIR).as_posix()}\n{text}")
-    knowledge = "\n\n".join(parts)
-    if len(knowledge) > MAX_KNOWLEDGE_CHARS:
-        return knowledge[:MAX_KNOWLEDGE_CHARS].rsplit("\n", 1)[0]
-    return knowledge
+            chunk = f"## {path.relative_to(KNOWLEDGE_DIR).as_posix()}\n{text}"
+            if total_chars + len(chunk) + 2 > MAX_KNOWLEDGE_CHARS:
+                if path.name.casefold().startswith("downloads_"):
+                    continue
+                remaining = MAX_KNOWLEDGE_CHARS - total_chars
+                if remaining > 2000:
+                    parts.append(chunk[:remaining].rsplit("\n", 1)[0])
+                break
+            parts.append(chunk)
+            total_chars += len(chunk) + 2
+    return "\n\n".join(parts)
 
 
 KNOWLEDGE = load_knowledge()
@@ -261,6 +282,37 @@ def local_fallback_answer(question: str) -> str:
             "\u041f\u043e\u0441\u043b\u0435 \u0441\u043f\u0430\u0441\u0435\u043d\u0438\u044f \u041a\u0440\u043e\u0442 \u0440\u0430\u0441\u0441\u043a\u0430\u0436\u0435\u0442 \u043f\u0440\u043e \u0442\u0430\u0439\u043d\u0438\u043a \u0421\u0442\u0440\u0435\u043b\u043a\u0430 \u0438 \u043f\u043e\u0434\u0432\u0435\u0434\u0451\u0442 \u043a \u0432\u0445\u043e\u0434\u0443 \u0432 \u043f\u043e\u0434\u0437\u0435\u043c\u0435\u043b\u044c\u044f. "
             "\u0414\u0430\u043b\u044c\u0448\u0435 \u0438\u0434\u0438 \u0432 \u043f\u043e\u0434\u0437\u0435\u043c\u0435\u043b\u044c\u044f \u0410\u0433\u0440\u043e\u043f\u0440\u043e\u043c\u0430, \u043d\u0430\u0439\u0434\u0438 \u0443\u0431\u0435\u0436\u0438\u0449\u0435/\u0442\u0430\u0439\u043d\u0438\u043a \u0421\u0442\u0440\u0435\u043b\u043a\u0430 \u0438 \u0437\u0430\u0431\u0435\u0440\u0438 \u0441\u044e\u0436\u0435\u0442\u043d\u0443\u044e \u0444\u043b\u0435\u0448\u043a\u0443."
         )
+    quick_kruglov = (
+        ("\u043a\u0440\u0443\u0433\u043b\u043e\u0432" in lowered or "\u043a\u0440\u0443\u0433\u043b\u043e\u0432\u0430" in lowered)
+        and (
+            "\u0441\u0430\u0445\u0430\u0440\u043e\u0432" in lowered
+            or "\u044f\u043d\u0442\u0430\u0440" in lowered
+            or "\u0436\u0438\u0432" in lowered
+            or "\u0434\u043e\u0432\u0435\u0441" in lowered
+            or "\u0441\u043f\u0430\u0441" in lowered
+        )
+    )
+    if quick_kruglov:
+        return (
+            "\u0422\u0435\u043d\u044c \u0427\u0435\u0440\u043d\u043e\u0431\u044b\u043b\u044f: \u041a\u0440\u0443\u0433\u043b\u043e\u0432\u0430 \u043b\u0443\u0447\u0448\u0435 \u0434\u043e\u0432\u0435\u0441\u0442\u0438 \u0436\u0438\u0432\u044b\u043c \u0434\u043e \u042f\u043d\u0442\u0430\u0440\u044f/\u0421\u0430\u0445\u0430\u0440\u043e\u0432\u0430: "
+            "\u0442\u0430\u043a \u0442\u044b \u043f\u043e\u043b\u0443\u0447\u0438\u0448\u044c \u043d\u043e\u0440\u043c\u0430\u043b\u044c\u043d\u0443\u044e \u0446\u0435\u043f\u043e\u0447\u043a\u0443 \u0441 \u0443\u0447\u0451\u043d\u044b\u043c\u0438, \u0437\u0430\u043c\u0435\u0440\u0430\u043c\u0438 \u0438 \u043f\u0441\u0438-\u0448\u043b\u0435\u043c\u043e\u043c. "
+            "\u041d\u043e \u0435\u0441\u043b\u0438 \u043e\u043d \u0443\u043c\u0435\u0440, \u044d\u0442\u043e \u043d\u0435 \u0434\u043e\u043b\u0436\u043d\u043e \u043d\u0430\u0432\u0441\u0435\u0433\u0434\u0430 \u043b\u043e\u043c\u0430\u0442\u044c \u043f\u0440\u043e\u0445\u043e\u0436\u0434\u0435\u043d\u0438\u0435: \u043f\u0440\u043e\u0432\u0435\u0440\u044c \u0435\u0433\u043e \u0442\u0435\u043b\u043e, "
+            "\u0437\u0430\u0431\u0435\u0440\u0438 \u0434\u0430\u043d\u043d\u044b\u0435/\u0444\u043b\u0435\u0448\u043a\u0443/\u041a\u041f\u041a \u0438 \u043d\u0435\u0441\u0438 \u0421\u0430\u0445\u0430\u0440\u043e\u0432\u0443. \u041c\u0438\u043d\u0443\u0441 \u0441\u043c\u0435\u0440\u0442\u0438 \u2014 \u043c\u0435\u043d\u044c\u0448\u0435 \u043d\u0430\u0433\u0440\u0430\u0434\u044b/\u0434\u0438\u0430\u043b\u043e\u0433\u043e\u0432. "
+            "\u0415\u0441\u043b\u0438 \u0435\u0441\u0442\u044c \u0441\u0442\u0430\u0440\u044b\u0439 \u0441\u0435\u0439\u0432 \u2014 \u043b\u0443\u0447\u0448\u0435 \u043f\u0435\u0440\u0435\u0438\u0433\u0440\u0430\u0442\u044c \u0438 \u0441\u043f\u0430\u0441\u0442\u0438 \u0435\u0433\u043e."
+        )
+
+    quick_soc_red_forest_loot = (
+        ("\u0440\u044b\u0436" in lowered or "\u0440\u0435\u0434 \u0444\u043e\u0440\u0435\u0441\u0442" in lowered or "red forest" in lowered)
+        and ("\u0445\u0430\u0431\u0430\u0440" in lowered or "\u043b\u0443\u0442" in lowered or "\u0442\u0430\u0439\u043d\u0438\u043a" in lowered)
+        and ("\u0442\u0435\u043d\u044c" in lowered or "\u0447\u0435\u0440\u043d\u043e\u0431" in lowered)
+    )
+    if quick_soc_red_forest_loot:
+        return (
+            "\u0422\u0435\u043d\u044c \u0427\u0435\u0440\u043d\u043e\u0431\u044b\u043b\u044f: \u043e\u0442\u0434\u0435\u043b\u044c\u043d\u043e\u0439 \u0441\u044e\u0436\u0435\u0442\u043d\u043e\u0439 \u00ab\u0434\u043e\u0431\u044b\u0447\u0438\u00bb \u0432 \u0420\u044b\u0436\u0435\u043c \u043b\u0435\u0441\u0443 \u0434\u043b\u044f \u043f\u0440\u043e\u0445\u043e\u0436\u0434\u0435\u043d\u0438\u044f \u043d\u0435\u0442. "
+            "\u0415\u0441\u0442\u044c \u043e\u0431\u044b\u0447\u043d\u044b\u0439 \u043b\u0443\u0442/\u0442\u0430\u0439\u043d\u0438\u043a\u0438 \u043f\u043e \u043d\u0430\u0432\u043e\u0434\u043a\u0430\u043c, \u043d\u043e \u0431\u0435\u0437 \u043a\u043e\u043d\u043a\u0440\u0435\u0442\u043d\u043e\u0439 \u043d\u0430\u0432\u043e\u0434\u043a\u0438 \u0438\u0433\u0440\u0430 \u043d\u0435 \u043e\u0431\u044f\u0437\u044b\u0432\u0430\u0435\u0442 \u0442\u0430\u043c \u0447\u0442\u043e-\u0442\u043e \u0438\u0441\u043a\u0430\u0442\u044c. "
+            "\u0414\u043b\u044f \u0441\u044e\u0436\u0435\u0442\u0430 \u0433\u043b\u0430\u0432\u043d\u043e\u0435 \u2014 \u043f\u0440\u043e\u0439\u0442\u0438 \u0420\u0430\u0434\u0430\u0440/X-10, \u043e\u0442\u043a\u043b\u044e\u0447\u0438\u0442\u044c \u0412\u044b\u0436\u0438\u0433\u0430\u0442\u0435\u043b\u044c \u0438 \u0438\u0434\u0442\u0438 \u0434\u0430\u043b\u044c\u0448\u0435 \u043a \u0427\u0410\u042d\u0421."
+        )
+
     quick_skat3 = "\u0441\u043a\u0430\u0442-3" in lowered or "\u0441\u043a\u0430\u0442 3" in lowered
     if quick_skat3:
         return (
