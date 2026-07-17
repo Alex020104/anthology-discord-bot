@@ -180,7 +180,7 @@ def score_chunk(chunk: dict, tokens: list[str], question: str, game: str) -> int
     if game:
         score += 70 if game.casefold() in haystack else -90
     q = normalize(question)
-    if title and title in q:
+    if title and title in q and title != normalize(chunk.get("source", "")):
         score += 100
     for token in tokens:
         if token in GAME_ALIAS_TOKENS:
@@ -190,7 +190,7 @@ def score_chunk(chunk: dict, tokens: list[str], question: str, game: str) -> int
             score += 45
         if any(v in haystack for v in variants):
             score += 8
-    if any(word in q for word in ("убить", "перебить", "застрелить", "атаковать")):
+    if any(word in q for word in ("убить", "убью", "перебить", "застрелить", "атаковать")):
         if any(word in haystack for word in ("перебить", "рейд", "медвед", "атак", "расправ")):
             score += 65
         if any(word in haystack for word in ("выкуп", "заплат", "артефакт", "обмен")) and not any(word in haystack for word in ("перебить", "рейд", "атак")):
