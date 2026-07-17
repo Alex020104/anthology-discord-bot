@@ -199,10 +199,36 @@ def story_route_answer(lowered: str, language: str) -> str:
     )
 
 
+def unknown_or_unconfirmed_quest_answer(lowered: str, language: str) -> str | None:
+    faction_base_assault = (
+        ("\u0448\u0442\u0443\u0440\u043c" in lowered or "\u0430\u0442\u0430\u043a" in lowered)
+        and "\u0431\u0430\u0437" in lowered
+        and "\u0441\u0432\u043e\u0431\u043e\u0434" in lowered
+        and ("\u0434\u043e\u043b\u0433" in lowered or "\u0434\u043e\u043b\u0433\u043e\u0432" in lowered)
+        and ("\u0442\u0435\u043d\u044c" in lowered or "\u0447\u0435\u0440\u043d\u043e\u0431" in lowered or "\u0442\u0447" in lowered)
+    )
+    if not faction_base_assault:
+        return None
+    if language == "English":
+        return (
+            "I do not have a confirmed quest like “assault the Freedom base with Duty” in our Shadow of Chernobyl / Anthology knowledge base. "
+            "It may be confused with separate Duty/Freedom side tasks or faction combat, but I should not replace it with another quest. "
+            "If this exists in your build, send the exact quest title or NPC who gives it and I will add it."
+        )
+    return (
+        "Такого подтверждённого квеста — «штурм базы Свободы с долговцами» — у нас в базе по Тени Чернобыля/Anthology сейчас нет. "
+        "Похоже на путаницу с отдельными заданиями Долга/Свободы или обычной войной группировок, но я не должен подменять это другим квестом. "
+        "Если он реально есть в вашей сборке — дай точное название задания или NPC, кто его выдаёт, и я добавлю."
+    )
+
+
 def local_fallback_answer(question: str) -> str:
     question = (question or "").strip()
     lowered = question.casefold()
     language = user_language_hint(question)
+    unconfirmed = unknown_or_unconfirmed_quest_answer(lowered, language)
+    if unconfirmed:
+        return unconfirmed
     quick_shadow_start = (
         ("\u0432\u043e\u043b\u043a" in lowered or "\u0432\u043e\u043b\u043a\u043e\u043c" in lowered)
         and ("\u0431\u0430\u043d\u0434\u0438\u0442" in lowered or "\u0431\u0430\u043d\u0434\u0438\u0442\u0430\u043c" in lowered)
@@ -536,6 +562,7 @@ async def ask_yura(question: str, author_name: str) -> str:
         "Start with a concrete answer, then add a short explanation if useful. "
         "For story/navigation questions, behave like a guide: name the location chain, nearest landmark, transition, NPC, and what to do if the marker is missing. "
         "Use left/right/straight/back only when the entry point or landmark is known; otherwise orient by map names, transitions, buildings, bases, and NPCs. "
+        "If the user asks about a specific quest, NPC, title, or consequence and the local knowledge has no exact match, say that this quest is not confirmed in our Anthology knowledge/build; do not substitute a different nearby quest. "
         "If the user asks in English, answer in English. If the user asks in Russian, answer in Russian. "
         "Do not invent download links, versions, or server facts. If the local knowledge does not contain the answer, say that it should be checked in the Anthology Discord and added to the knowledge base. "
         f"Detected user language: {language}.\n\n"
