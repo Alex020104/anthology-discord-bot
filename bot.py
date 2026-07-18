@@ -243,6 +243,19 @@ def local_fallback_answer(question: str) -> str:
     question = (question or "").strip()
     lowered = question.casefold()
     language = user_language_hint(question)
+    quick_answer = quick_story_decision_answer(question)
+    if quick_answer:
+        return quick_answer
+    quick_support = quick_support_decision_answer(question)
+    if quick_support:
+        return quick_support
+    if is_story_priority_question(question):
+        full_context = full_sources.find_context(question, str(ROOT))
+        if full_context:
+            return local_story_answer_from_context(question, full_context)
+        qa_answer = story_qa.find_answer(question, str(ROOT))
+        if qa_answer:
+            return qa_answer
     support_answer = general_knowledge.find_answer(question, str(ROOT), max_chars=MAX_ANSWER_CHARS)
     if support_answer:
         return support_answer
@@ -669,6 +682,31 @@ def split_sentences(text: str) -> list[str]:
     return [s.strip(" \t\r\n") for s in re.split(r"(?<=[.!?])\s+", cleaned) if s.strip()]
 
 
+def is_story_priority_question(question: str) -> bool:
+    q = (question or "").casefold().replace("ё", "е")
+    return any(term in q for term in (
+        "сюжет", "квест", "задание", "маркер", "проводник", "доктор", "призрак", "стрелок",
+        "декодер", "монолит", "исполнитель желаний", "тайник", "лаборатор", "подземель",
+        "тень чернобыля", "тень черноб", "чистое небо", "зов припяти",
+        "кордон", "агропром", "янтар", "радар", "чаэс", "x-16", "х-16", "x-18", "х-18",
+        "волк", "шустрый", "сидорович", "круглов", "сахаров",
+    ))
+
+
+def quick_support_decision_answer(question: str) -> str | None:
+    q = (question or "").casefold().replace("ё", "е")
+    if (
+        ("слаб" in q or "слабом желез" in q or "слабый пк" in q or "картош" in q)
+        and ("модпак" in q or "модпаком" in q or "модак" in q)
+    ):
+        return (
+            "Если железо слабое — лучше играть в «Оригинал». Он легче и может работать даже на DX8/DX9/DX11. "
+            "«Модпак» тяжелее: оружейный пак, графика и геймплейные улучшения, и он рассчитан только на DX11. "
+            "Попробовать можно, но если начнутся просадки/вылеты — переходи на «Оригинал» или сильно режь графику."
+        )
+    return None
+
+
 def local_story_answer_from_context(question: str, context: dict, max_chars: int = MAX_ANSWER_CHARS) -> str:
     title = context.get("title") or "Источник"
     source = context.get("source") or "гайд"
@@ -743,6 +781,24 @@ def quick_story_decision_answer(question: str) -> str | None:
     return None
 
 
+_legacy_quick_story_decision_answer = quick_story_decision_answer
+
+
+def quick_story_decision_answer(question: str) -> str | None:
+    q = (question or "").casefold().replace("ё", "е")
+    if (
+        ("проводник" in q or "доктор" in q or "декодер" in q)
+        and ("тень" in q or "черноб" in q or "сюжет" in q)
+    ):
+        return (
+            "Тень Чернобыля: если хочешь нормальную/истинную концовку — да, к Проводнику идти нужно. "
+            "Цепочка такая: после X-16 и информации от Призрака идёшь к Проводнику на Кордон, он отправляет к Доктору "
+            "в тайник Стрелка в подземельях Агропрома. Доктор подсказывает про декодер в Припяти. "
+            "Без этой цепочки ты, скорее всего, уйдёшь к Исполнителю желаний/ложным концовкам и не откроешь правильный путь."
+        )
+    return _legacy_quick_story_decision_answer(question)
+
+
 async def answer_from_story_context(question: str, author_name: str, context: dict) -> str:
     if is_direct_decision_question(question):
         return local_story_answer_from_context(question, context)
@@ -779,6 +835,20 @@ async def ask_yura(question: str, author_name: str) -> str:
     quick_answer = quick_story_decision_answer(question)
     if quick_answer:
         return quick_answer
+    quick_support = quick_support_decision_answer(question)
+    if quick_support:
+        return quick_support
+    if is_story_priority_question(question):
+        full_context = full_sources.find_context(question, str(ROOT))
+        if full_context:
+            try:
+                return await answer_from_story_context(question, author_name, full_context)
+            except Exception as exc:
+                print(f"OpenAI story answer failed: {type(exc).__name__}: {exc}")
+                return local_story_answer_from_context(question, full_context)
+        qa_answer = story_qa.find_answer(question, str(ROOT))
+        if qa_answer:
+            return trim_answer(qa_answer)
     support_answer = general_knowledge.find_answer(question, str(ROOT), max_chars=MAX_ANSWER_CHARS)
     if support_answer:
         return trim_answer(support_answer)
@@ -835,6 +905,22 @@ def looks_like_followup(question: str) -> bool:
         "кордон", "затор", "юпитер", "припять", "агропром", "х-8", "x-8",
     ))
     return any(word in q for word in followup_words) and not has_explicit_topic
+
+
+def looks_like_followup(question: str) -> bool:
+    q = (question or "").casefold().replace("ё", "е").strip()
+    if not q:
+        return False
+    if "?" in q or any(phrase in q for phrase in (
+        "могу ли", "можно ли", "обязательно", "чем отличается", "что делать", "как сделать",
+        "почему", "где", "куда", "когда", "сюжет", "квест", "задание", "модпак", "оригинал",
+        "проводник", "доктор", "декодер",
+    )):
+        return False
+    return any(phrase in q for phrase in (
+        "а дальше", "куда потом", "что потом", "а если", "а он", "а она", "а они",
+        "после этого", "и что", "как быть", "там что", "он умер", "он мертв", "я нашел",
+    ))
 
 
 def context_key_from_message(message: discord.Message) -> str:
