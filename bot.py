@@ -45,7 +45,8 @@ MAX_ANSWER_CHARS = int(os.getenv("MAX_ANSWER_CHARS", "3600"))
 DISCORD_CHUNK_CHARS = 1850
 BRIDGE_RATE_SECONDS = float(os.getenv("BRIDGE_RATE_SECONDS", "2.0"))
 CONVERSATION_TTL_SECONDS = float(os.getenv("CONVERSATION_TTL_SECONDS", "900"))
-OPENAI_ENABLED = os.getenv("OPENAI_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
+OPENAI_ENABLED_REQUESTED = os.getenv("OPENAI_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
+OPENAI_ENABLED = OPENAI_ENABLED_REQUESTED and bool(OPENAI_API_KEY)
 AUTO_REPLY_QUESTION_CHANNEL_IDS = {
     item.strip()
     for item in os.getenv("AUTO_REPLY_QUESTION_CHANNEL_IDS", "").split(",")
@@ -54,10 +55,8 @@ AUTO_REPLY_QUESTION_CHANNEL_IDS = {
 
 if not DISCORD_TOKEN:
     raise RuntimeError("DISCORD_TOKEN is not set.")
-if not OPENAI_API_KEY:
-    raise RuntimeError("OPENAI_API_KEY is not set.")
 
-openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY, max_retries=0, timeout=12.0)
+openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY, max_retries=0, timeout=12.0) if OPENAI_ENABLED else None
 
 intents = discord.Intents.default()
 intents.message_content = True
