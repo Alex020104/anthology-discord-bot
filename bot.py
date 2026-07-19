@@ -44,6 +44,7 @@ PORT = int(os.getenv("PORT", "8787"))
 MAX_ANSWER_CHARS = int(os.getenv("MAX_ANSWER_CHARS", "3600"))
 DISCORD_CHUNK_CHARS = 1850
 BRIDGE_RATE_SECONDS = float(os.getenv("BRIDGE_RATE_SECONDS", "2.0"))
+CONVERSATION_TTL_SECONDS = float(os.getenv("CONVERSATION_TTL_SECONDS", "900"))
 OPENAI_ENABLED = os.getenv("OPENAI_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
 AUTO_REPLY_QUESTION_CHANNEL_IDS = {
     item.strip()
@@ -1848,11 +1849,51 @@ def dm_context_key_from_user(user: discord.abc.User) -> str:
     return f"discord-dm:{getattr(user, 'id', 'user')}"
 
 
-def with_conversation_context(question: str, context_key: str | None) -> str:
+def context_is_recent(context_key: str | None) -> bool:
+    if not context_key:
+        return False
+    previous = CONVERSATION_CONTEXT.get(context_key)
+    if not previous:
+        return False
+    try:
+        ts = float(previous.get("ts", "0"))
+    except Exception:
+        ts = 0.0
+    return ts > 0 and (time.time() - ts) <= CONVERSATION_TTL_SECONDS
+
+
+def is_reply_to_yura(message: discord.Message) -> bool:
+    reference = getattr(message, "reference", None)
+    resolved = getattr(reference, "resolved", None) if reference else None
+    author = getattr(resolved, "author", None)
+    return bool(bot.user and author and getattr(author, "id", None) == bot.user.id)
+
+
+def should_continue_discord_dialogue(message: discord.Message, context_key: str | None) -> bool:
+    if message.author.bot:
+        return False
+    content = (message.content or "").strip()
+    if not content:
+        return False
+    if message.guild is None:
+        return context_is_recent(context_key)
+    if is_reply_to_yura(message):
+        return True
+    if not context_is_recent(context_key):
+        return False
+    lowered = content.casefold().replace("ё", "е")
+    return (
+        "?" in content
+        or lowered.startswith(("а ", "а как", "а где", "а куда", "а что", "а если", "а можно", "почему", "как ", "где ", "куда ", "что "))
+        or looks_like_followup(content)
+    )
+
+
+def with_conversation_context(question: str, context_key: str | None, force_context: bool = False) -> str:
     if not context_key:
         return question
     previous = CONVERSATION_CONTEXT.get(context_key, "")
-    if previous and looks_like_followup(question):
+    if previous and (force_context or looks_like_followup(question)):
         topic = previous.get("topic", "")
         prev_question = previous.get("question", "")
         prev_answer = previous.get("answer", "")
@@ -1875,17 +1916,18 @@ def remember_conversation_context(context_key: str | None, question: str, answer
         "topic": extract_conversation_topic(compact_question, compact_answer),
         "question": compact_text(compact_question, 500),
         "answer": compact_answer,
+        "ts": str(time.time()),
     }
     if len(CONVERSATION_CONTEXT) > 300:
         for key in list(CONVERSATION_CONTEXT)[:80]:
             CONVERSATION_CONTEXT.pop(key, None)
 
 
-async def answer_discord(destination: discord.abc.Messageable, question: str, author_name: str, context_key: str | None = None) -> None:
+async def answer_discord(destination: discord.abc.Messageable, question: str, author_name: str, context_key: str | None = None, force_context: bool = False) -> None:
     if not question:
         await destination.send("\u041d\u0430\u043f\u0438\u0448\u0438 \u0432\u043e\u043f\u0440\u043e\u0441 \u043f\u043e\u0441\u043b\u0435 \u043e\u0431\u0440\u0430\u0449\u0435\u043d\u0438\u044f: `\u042e\u0440\u0430, ...` \u0438\u043b\u0438 \u0438\u0441\u043f\u043e\u043b\u044c\u0437\u0443\u0439 `/ask`.")
         return
-    effective_question = with_conversation_context(question, context_key)
+    effective_question = with_conversation_context(question, context_key, force_context=force_context)
     async with destination.typing():
         try:
             answer = await ask_yura(effective_question, author_name)
@@ -1896,7 +1938,7 @@ async def answer_discord(destination: discord.abc.Messageable, question: str, au
     await send_discord_answer(destination, answer)
 
 
-async def answer_user_dm(message: discord.Message, question: str) -> bool:
+async def answer_user_dm(message: discord.Message, question: str, force_context: bool = False) -> bool:
     """Answer a guild mention in the user's DM and keep a private per-user context."""
     try:
         dm_channel = message.author.dm_channel or await message.author.create_dm()
@@ -1905,6 +1947,7 @@ async def answer_user_dm(message: discord.Message, question: str) -> bool:
             question,
             message.author.display_name,
             dm_context_key_from_user(message.author),
+            force_context=force_context,
         )
         return True
     except discord.Forbidden:
@@ -1995,11 +2038,13 @@ async def on_message(message: discord.Message) -> None:
     if message.author.bot:
         return
     triggered = is_triggered(message)
-    print(f"MESSAGE: guild={getattr(message.guild, 'id', None)} channel={getattr(message.channel, 'id', None)} author={message.author} content_len={len(message.content or '')} mentions_bot={bool(bot.user and bot.user in message.mentions)} triggered={triggered}", flush=True)
-    if triggered:
+    context_key = context_key_from_message(message)
+    continues_dialogue = should_continue_discord_dialogue(message, context_key)
+    print(f"MESSAGE: guild={getattr(message.guild, 'id', None)} channel={getattr(message.channel, 'id', None)} author={message.author} content_len={len(message.content or '')} mentions_bot={bool(bot.user and bot.user in message.mentions)} triggered={triggered} continues_dialogue={continues_dialogue}", flush=True)
+    if triggered or continues_dialogue:
         question = cleanup_question(message)
         if message.guild is not None:
-            delivered = await answer_user_dm(message, question)
+            delivered = await answer_user_dm(message, question, force_context=continues_dialogue)
             if delivered:
                 try:
                     await message.add_reaction("📩")
@@ -2007,7 +2052,7 @@ async def on_message(message: discord.Message) -> None:
                     pass
                 return
             await message.channel.send(f"{message.author.mention}, не могу написать тебе в личку — открой ЛС от участников сервера. Пока отвечаю здесь.")
-        await answer_discord(message.channel, question, message.author.display_name, context_key_from_message(message))
+        await answer_discord(message.channel, question, message.author.display_name, context_key, force_context=continues_dialogue)
         return
     await bot.process_commands(message)
 
