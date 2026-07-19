@@ -12,7 +12,7 @@ services:
         sync: false
       - key: OPENAI_MODEL
         value: gpt-4.1-mini
+      - key: OPENAI_ENABLED
+        value: "1"
       - key: BOT_DISPLAY_NAME
         value: Юра Семецкий
-      - key: BRIDGE_TOKEN
-        generateValue: true
